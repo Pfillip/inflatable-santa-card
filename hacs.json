@@ -1,0 +1,6 @@
+{
+  "name": "Inflatable Santa Card",
+  "filename": "inflatable-santa-card.js",
+  "render_readme": true,
+  "homeassistant": "2024.8.0"
+}

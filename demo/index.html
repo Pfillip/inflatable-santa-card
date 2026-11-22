@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Inflatable Santa Card – Demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 16px; --primary-text-color:#222; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+  ha-card { display: block; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  label { font-size: 14px; }
+</style>
+<script>
+  // Minimal stand-ins for Home Assistant elements
+  customElements.define("ha-card", class extends HTMLElement {});
+  customElements.define("ha-icon", class extends HTMLElement {});
+</script>
+<script type="module" src="../dist/inflatable-santa-card.js"></script>
+</head>
+<body>
+<div class="controls">
+  <button id="toggle">Ein/Aus</button>
+  <label>Wind km/h <input id="speed" type="range" min="0" max="110" value="25" /></label>
+  <label>Richtung <select id="dir"><option>W</option><option>O</option><option>N</option><option>SSW</option><option>NO</option></select></label>
+  <label>DWD <select id="lvl"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+  <label>Wetter <select id="wx"><option>snowy</option><option>cloudy</option><option>rainy</option><option>lightning-rainy</option><option>clear-night</option><option>fog</option><option>sunny</option></select></label>
+  <label><input id="night" type="checkbox" /> Nacht</label>
+</div>
+<div class="grid" id="grid"></div>
+<script type="module">
+  const params = new URLSearchParams(location.search);
+  const states = {
+    "switch.santa": { entity_id: "switch.santa", state: params.get("on") === "0" ? "off" : "on", attributes: { friendly_name: "Weihnachtsmann" } },
+    "sensor.wind_speed": { entity_id: "sensor.wind_speed", state: params.get("speed") ?? "25", attributes: { unit_of_measurement: "km/h", device_class: "wind_speed" } },
+    "sensor.wind_direction": { entity_id: "sensor.wind_direction", state: params.get("dir") ?? "W", attributes: {} },
+    "sensor.dwd_current_warning_level": { entity_id: "sensor.dwd_current_warning_level", state: params.get("lvl") ?? "0", attributes: {} },
+    "weather.home": { entity_id: "weather.home", state: params.get("wx") ?? "snowy", attributes: { temperature: -2 } },
+    "sun.sun": { entity_id: "sun.sun", state: params.get("night") === "1" ? "below_horizon" : "above_horizon", attributes: {} },
+  };
+  const warnNames = { 1: "WINDBÖEN", 2: "STURMBÖEN", 3: "ORKANARTIGE BÖEN", 4: "ORKANBÖEN" };
+  function setWarning(lvl) {
+    const s = states["sensor.dwd_current_warning_level"];
+    s.state = String(lvl);
+    s.attributes = lvl > 0 ? { warning_count: 1, warning_1_name: warnNames[lvl], warning_1_level: lvl, warning_1_headline: `Amtliche Warnung vor ${warnNames[lvl]}` } : { warning_count: 0 };
+  }
+  setWarning(Number(states["sensor.dwd_current_warning_level"].state));
+  let hass;
+  const makeHass = () => (hass = {
+    states: { ...states },
+    locale: { language: "de" },
+    language: "de",
+    callService: async (d, s, data) => {
+      const e = states[data.entity_id];
+      e.state = e.state === "on" ? "off" : "on";
+      states[data.entity_id] = { ...e };
+      update();
+    },
+  });
+  await customElements.whenDefined("inflatable-santa-card");
+  const card = document.createElement("inflatable-santa-card");
+  card.setConfig({
+    type: "custom:inflatable-santa-card",
+    entity: "switch.santa",
+    wind_speed_entity: "sensor.wind_speed",
+    wind_direction_entity: "sensor.wind_direction",
+    warning_entity: "sensor.dwd_current_warning_level",
+    weather_entity: "weather.home",
+  });
+  document.getElementById("grid").append(card);
+  function update() { makeHass(); card.hass = hass; }
+  update();
+  const set = (id, v) => { states[id] = { ...states[id], state: v }; update(); };
+  document.getElementById("toggle").onclick = () => hass.callService("homeassistant", "toggle", { entity_id: "switch.santa" });
+  document.getElementById("speed").oninput = (e) => set("sensor.wind_speed", e.target.value);
+  document.getElementById("dir").onchange = (e) => set("sensor.wind_direction", e.target.value);
+  document.getElementById("lvl").onchange = (e) => { setWarning(Number(e.target.value)); states["sensor.dwd_current_warning_level"] = { ...states["sensor.dwd_current_warning_level"] }; update(); };
+  document.getElementById("wx").onchange = (e) => set("weather.home", e.target.value);
+  document.getElementById("night").onchange = (e) => set("sun.sun", e.target.checked ? "below_horizon" : "above_horizon");
+  window.__toggle = () => hass.callService("homeassistant", "toggle", { entity_id: "switch.santa" });
+</script>
+</body>
+</html>
