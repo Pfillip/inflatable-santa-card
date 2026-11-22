@@ -1,5 +1,6 @@
 import { LitElement, html, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
 import { cardStyles } from "./styles";
 import { blower, defs, ground, halo, heap, ropes, santa, shadow } from "./art";
 import { hassLang, localize } from "./localize";
@@ -14,7 +15,7 @@ import {
 } from "./utils";
 import "./editor";
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 const CARD_TAG = "inflatable-santa-card";
 
 console.info(
@@ -24,6 +25,26 @@ console.info(
 );
 
 const ON_STATES = new Set(["on", "open", "playing", "home"]);
+
+// Register custom properties so that wind and warning changes transition smoothly.
+(() => {
+  const reg = (name: string, syntax: string, initialValue: string) => {
+    try {
+      (CSS as any).registerProperty?.({ name, syntax, inherits: true, initialValue });
+    } catch {
+      /* already registered */
+    }
+  };
+  reg("--lean", "<angle>", "0deg");
+  reg("--amp", "<angle>", "1deg");
+  reg("--hat-lean", "<angle>", "0deg");
+  reg("--warn-color", "<color>", "transparent");
+})();
+
+const POWER_ICON = svg`<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.56 5.44l-1.45 1.45A5.97 5.97 0 0 1 18 12a6 6 0 0 1-12 0c0-2.17 1.16-4.06 2.88-5.12L7.44 5.44A7.96 7.96 0 0 0 4 12a8 8 0 0 0 16 0c0-2.72-1.36-5.12-3.44-6.56M13 3h-2v10h2"/></svg>`;
+const UNPLUGGED_ICON = svg`<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.84 22.73L15.31 17.2 14.5 18c-1.3 1.3-3.08 1.83-4.79 1.6l-2.68 2.67-1.41-1.41 2.67-2.68C8.06 16.47 8.6 14.7 9.89 13.4l.8-.81L1.11 3l1.28-1.27 19.73 19.73zM17.6 14.9l-1.4-1.41 1.6-1.6-1.06-1.06-1.6 1.6-1.41-1.4 1.6-1.6-1.06-1.07-1.6 1.6-1.41-1.4 2.12-2.13a5.25 5.25 0 0 1 6.44-.78l2.67-2.67 1.41 1.41-2.67 2.67c.6.98.84 2.13.71 3.24z"/></svg>`;
+
+type Linger = { value: any; until: number };
 
 const fireEvent = (node: EventTarget, type: string, detail?: unknown): void => {
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -40,6 +61,11 @@ export class InflatableSantaCard extends LitElement {
   private _held = false;
   private _tapTimer?: number;
   private _lastIsOn?: boolean;
+  @state() private _pending = false;
+  @state() private _failed = false;
+  private _pendingTimer?: number;
+  private _linger = new Map<string, Linger>();
+  private _lingerTimer?: number;
 
   static styles = cardStyles;
 
@@ -75,6 +101,7 @@ export class InflatableSantaCard extends LitElement {
       show_name: true,
       show_info: true,
       show_weather_effects: true,
+      show_power_button: true,
       storm_threshold: 50,
       view_direction: 0,
       ...config,
@@ -97,7 +124,7 @@ export class InflatableSantaCard extends LitElement {
 
   protected shouldUpdate(changed: PropertyValues): boolean {
     if (!this._config) return false;
-    if (changed.has("_config") || changed.has("_animate")) return true;
+    if (["_config", "_animate", "_pending", "_failed"].some((k) => changed.has(k))) return true;
     const oldHass = changed.get("hass") as HomeAssistant | undefined;
     if (!oldHass || !this.hass) return true;
     const c = this._config;
@@ -160,7 +187,7 @@ export class InflatableSantaCard extends LitElement {
   private _runAction(kind: "tap" | "hold" | "double_tap"): void {
     if (!this.hass || !this._config) return;
     const defaults: Record<string, ActionConfig> = {
-      tap: { action: "toggle" },
+      tap: { action: this._config.show_power_button === false ? "toggle" : "more-info" },
       hold: { action: "more-info" },
       double_tap: { action: "none" },
     };
@@ -210,6 +237,55 @@ export class InflatableSantaCard extends LitElement {
     }
   }
 
+  private async _onPower(ev: Event): Promise<void> {
+    ev.stopPropagation();
+    if (!this.hass || !this._config?.entity || this._pending) return;
+    const stateObj = this.hass.states[this._config.entity];
+    if (!stateObj || stateObj.state === "unavailable") return;
+    this._pending = true;
+    this._failed = false;
+    window.clearTimeout(this._pendingTimer);
+    // if the plug does not report back, show a short error shake
+    this._pendingTimer = window.setTimeout(() => {
+      this._pending = false;
+      this._failed = true;
+      window.setTimeout(() => (this._failed = false), 700);
+    }, 10000);
+    fireEvent(this, "haptic", "light");
+    try {
+      await this.hass.callService("homeassistant", "toggle", { entity_id: this._config.entity });
+    } catch {
+      window.clearTimeout(this._pendingTimer);
+      this._pending = false;
+      this._failed = true;
+      fireEvent(this, "haptic", "failure");
+      window.setTimeout(() => (this._failed = false), 700);
+    }
+  }
+
+  /**
+   * Keeps an effect visible for a moment after it ended, so it can fade out.
+   * Returns the value to render and whether it is currently leaving.
+   */
+  private _keep<T>(key: string, value: T): { value: T; leaving: boolean } {
+    const active = !!value;
+    const now = Date.now();
+    if (active) {
+      this._linger.set(key, { value, until: 0 });
+      return { value, leaving: false };
+    }
+    const prev = this._linger.get(key);
+    if (!prev || !this._animate) return { value, leaving: false };
+    if (prev.until === 0) prev.until = now + 1600;
+    if (now < prev.until) {
+      window.clearTimeout(this._lingerTimer);
+      this._lingerTimer = window.setTimeout(() => this.requestUpdate(), prev.until - now + 30);
+      return { value: prev.value, leaving: true };
+    }
+    this._linger.delete(key);
+    return { value, leaving: false };
+  }
+
   // ---------------------------------------------------------------- render
 
   protected render(): TemplateResult | typeof nothing {
@@ -226,6 +302,10 @@ export class InflatableSantaCard extends LitElement {
     const isOn = !!stateObj && ON_STATES.has(stateObj.state);
     // animate only when the state really changed after the first paint
     const animate = this._animate && this._lastIsOn !== undefined && this._lastIsOn !== isOn;
+    if (this._lastIsOn !== undefined && this._lastIsOn !== isOn && this._pending) {
+      window.clearTimeout(this._pendingTimer);
+      this._pending = false;
+    }
     if (this._lastIsOn === undefined || this._lastIsOn !== isOn) {
       this._lastIsOn = isOn;
       if (animate) this._animatingUntil = Date.now() + 3500;
@@ -258,6 +338,8 @@ export class InflatableSantaCard extends LitElement {
       scene.frost ? "frost" : "",
       storm ? "storm" : "",
       windX < -0.05 ? "wind-left" : "",
+      unavailable ? "unavailable" : "",
+      this._pending ? "pending" : "",
     ].join(" ");
 
     const warnColor = warning?.color || "transparent";
@@ -272,9 +354,12 @@ export class InflatableSantaCard extends LitElement {
     ].join(";");
 
     const name = c.name || stateObj?.attributes.friendly_name || c.entity;
+    const stormHint = this._keep("storm", storm && isOn);
     const stateText = unavailable
       ? localize("unavailable", lang)
-      : localize(isOn ? "on" : "off", lang);
+      : this._pending
+        ? localize(isOn ? "deflating" : "inflating", lang)
+        : localize(isOn ? "on" : "off", lang);
 
     return html`
       <ha-card
@@ -289,6 +374,9 @@ export class InflatableSantaCard extends LitElement {
         @contextmenu=${(e: Event) => e.preventDefault()}
       >
         <div class=${sceneClasses} style=${sceneStyle}>
+          <div class="sky overcast-day"></div>
+          <div class="sky night"></div>
+          <div class="sky overcast-night"></div>
           <div class="tint"></div>
           ${this._renderSky(scene, speed, windX)}
           <svg viewBox="0 0 240 260" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
@@ -298,15 +386,34 @@ export class InflatableSantaCard extends LitElement {
             ${defs}${halo}${ropes}${heap}${santa}${blower}
           </svg>
           ${this._renderPrecipitation(scene, speed, windX)}
-          ${c.show_name !== false || (storm && isOn)
+          ${unavailable ? html`<div class="unplugged" title=${stateText}>${UNPLUGGED_ICON}</div>` : nothing}
+          ${c.show_power_button !== false
+            ? html`<button
+                class="power ${this._failed ? "failed" : ""}"
+                type="button"
+                ?disabled=${unavailable}
+                aria-pressed=${isOn ? "true" : "false"}
+                aria-label="${name}: ${isOn ? localize("turn_off", lang) : localize("turn_on", lang)}"
+                title=${isOn ? localize("turn_off", lang) : localize("turn_on", lang)}
+                @pointerdown=${this._stop}
+                @pointerup=${this._stop}
+                @keydown=${this._stop}
+                @click=${this._onPower}
+              >
+                <span class="ring"></span>${POWER_ICON}
+              </button>`
+            : nothing}
+          ${c.show_name !== false || stormHint.value
             ? html`<div class="header">
                 ${c.show_name !== false
                   ? html`<div class="title">
                       <span class="name">${name}</span>
-                      <span class="state">${stateText}</span>
+                      <span class="state">${keyed(stateText, html`<span class="state-text">${stateText}</span>`)}</span>
                     </div>`
                   : html`<span></span>`}
-                ${storm && isOn ? html`<span class="storm-hint">${localize("storm_hint", lang)}</span>` : nothing}
+                ${stormHint.value
+                  ? html`<span class="storm-hint ${stormHint.leaving ? "leaving" : ""}">${localize("storm_hint", lang)}</span>`
+                  : nothing}
               </div>`
             : nothing}
         </div>
@@ -331,56 +438,78 @@ export class InflatableSantaCard extends LitElement {
 
   private _renderSky(scene: Scene, speed: number, windX: number): TemplateResult {
     const rnd = seeded(7);
+    const starsK = this._keep("stars", scene.night && scene.clouds < 2);
     const stars =
-      scene.night && scene.clouds < 2
+      starsK.value
         ? Array.from({ length: 18 }, () => {
             const style = `left:${(rnd() * 100).toFixed(1)}%;top:${(rnd() * 55).toFixed(1)}%;--dur:${(2 + rnd() * 3).toFixed(1)}s;--delay:-${(rnd() * 4).toFixed(1)}s`;
             return html`<span class="star" style=${style}></span>`;
           })
         : [];
-    const cloudCount = scene.clouds === 0 ? 0 : scene.clouds === 1 ? 2 : 4;
+    const cloudsK = this._keep("clouds", scene.clouds);
+    const cloudLevel = cloudsK.value;
+    const cloudCount = cloudLevel === 0 ? 0 : cloudLevel === 1 ? 2 : 4;
     const cloudDur = clamp(90 - speed * 1.2, 18, 90);
     const clouds = Array.from({ length: cloudCount }, (_, i) => {
-      const alpha = scene.clouds >= 2 ? (scene.night ? 0.18 : 0.75) : scene.night ? 0.12 : 0.85;
+      const alpha = cloudLevel >= 2 ? (scene.night ? 0.18 : 0.75) : scene.night ? 0.12 : 0.85;
       const style = `--y:${(4 + rnd() * 28).toFixed(1)}%;--w:${(70 + rnd() * 70).toFixed(0)}px;--alpha:${alpha};--dur:${(cloudDur * (0.8 + rnd() * 0.5)).toFixed(1)}s;--delay:-${((i / cloudCount) * cloudDur).toFixed(1)}s`;
       return html`<span class="cloud" style=${style}></span>`;
     });
+    const fogK = this._keep("fog", scene.fog);
+    const flashK = this._keep("lightning", scene.lightning);
     return html`
-      <div class="layer">${stars}</div>
-      <div class="layer clouds ${windX < -0.05 ? "wind-left" : ""}">${clouds}</div>
-      ${scene.fog ? html`<div class="layer"><span class="fog" style="top:45%"></span><span class="fog" style="top:62%;animation-duration:31s"></span></div>` : nothing}
-      ${scene.lightning ? html`<div class="layer"><span class="flash"></span></div>` : nothing}
+      <div class="layer">${this._fx("stars", starsK.leaving, stars)}</div>
+      <div class="layer clouds ${windX < -0.05 ? "wind-left" : ""}">${this._fx(`clouds${cloudCount}`, cloudsK.leaving, clouds)}</div>
+      <div class="layer">
+        ${fogK.value
+          ? this._fx("fog", fogK.leaving, html`<span class="fog" style="top:45%"></span><span class="fog" style="top:62%;animation-duration:31s"></span>`)
+          : nothing}
+      </div>
+      <div class="layer">${flashK.value ? this._fx("flash", flashK.leaving, html`<span class="flash"></span>`) : nothing}</div>
     `;
+  }
+
+  /** Wraps an effect group so it fades in when it appears and out when it ends. */
+  private _fx(key: string, leaving: boolean, content: unknown): unknown {
+    if (Array.isArray(content) && content.length === 0) return nothing;
+    return keyed(key, html`<div class="fx ${leaving ? "leaving" : ""}">${content}</div>`);
   }
 
   private _renderPrecipitation(scene: Scene, speed: number, windX: number): TemplateResult {
     const rnd = seeded(42);
     const drift = clamp(windX * speed * 0.9, -70, 70); // in % of the width
-    const flakes = scene.snow
-      ? Array.from({ length: scene.snow >= 2 ? 70 : 32 }, () => {
-          const size = 2 + rnd() * (scene.snow >= 2 ? 4 : 3);
-          const dur = (scene.snow >= 2 ? 4 : 7) + rnd() * 4 - clamp(speed / 30, 0, 2);
+    const snowK = this._keep("snow", scene.snow);
+    const rainK = this._keep("rain", scene.rain);
+    const snow = snowK.value;
+    const rain = rainK.value;
+    const flakes = snow
+      ? Array.from({ length: snow >= 2 ? 70 : 32 }, () => {
+          const size = 2 + rnd() * (snow >= 2 ? 4 : 3);
+          const dur = (snow >= 2 ? 4 : 7) + rnd() * 4 - clamp(speed / 30, 0, 2);
           const style = `--x:${(rnd() * 140 - 20 - drift / 2).toFixed(1)}%;--size:${size.toFixed(1)}px;--dur:${dur.toFixed(1)}s;--delay:-${(rnd() * dur).toFixed(1)}s;--drift:${(drift + (rnd() * 10 - 5)).toFixed(1)}%;--alpha:${(0.6 + rnd() * 0.4).toFixed(2)};--rest:${(rnd() * 90).toFixed(0)}%`;
           return html`<span class="flake" style=${style}><i></i></span>`;
         })
       : [];
     const angle = clamp(-windX * speed * 0.7, -45, 45);
-    const drops = scene.rain
-      ? Array.from({ length: scene.rain >= 2 ? 70 : 35 }, () => {
+    const drops = rain
+      ? Array.from({ length: rain >= 2 ? 70 : 35 }, () => {
           const dur = 0.5 + rnd() * 0.4;
           const style = `--x:${(rnd() * 140 - 20 - drift / 3).toFixed(1)}%;--dur:${dur.toFixed(2)}s;--delay:-${(rnd() * dur).toFixed(2)}s;--drift:${(drift / 3).toFixed(1)}%;--angle:${angle.toFixed(1)}deg;--rest:${(rnd() * 90).toFixed(0)}%`;
           return html`<span class="drop" style=${style}><i></i></span>`;
         })
       : [];
-    const streakCount = speed < 8 ? 0 : Math.round(clamp(speed / 7, 1, 12));
+    const streakK = this._keep("streaks", speed < 8 ? 0 : Math.round(clamp(speed / 7, 1, 12)));
+    const streakCount = streakK.value;
     const streakDur = clamp(3.2 - speed / 30, 0.6, 3.2);
     const streaks = Array.from({ length: streakCount }, () => {
       const style = `--y:${(8 + rnd() * 80).toFixed(1)}%;--len:${(30 + rnd() * 50).toFixed(0)}px;--dur:${(streakDur * (0.8 + rnd() * 0.5)).toFixed(2)}s;--delay:-${(rnd() * streakDur * 2).toFixed(2)}s`;
       return html`<span class="streak-wrap" style=${style}><i></i></span>`;
     });
     return html`
-      <div class="layer">${drops}${flakes}</div>
-      <div class="layer ${windX < -0.05 ? "wind-left" : ""}">${streaks}</div>
+      <div class="layer">
+        ${this._fx(`rain${rain}`, rainK.leaving, drops)}${this._fx(`snow${snow}`, snowK.leaving, flakes)}
+      </div>
+      <div class="layer ${windX < -0.05 ? "wind-left" : ""}">${this._fx(`wind${streakCount}`, streakK.leaving, streaks)}</div>
     `;
   }
 
@@ -414,7 +543,7 @@ export class InflatableSantaCard extends LitElement {
         const dark = warning.level >= 3;
         const text = warning.headline || `${localize("warning_level", lang)} ${warning.level}`;
         chips.push(html`<span
-          class="chip warning ${dark ? "dark" : ""}"
+          class="chip warning ${dark ? "dark severe" : ""}"
           style="--warn-color:${warning.color}"
           title=${warning.names.join(", ")}
           @pointerdown=${this._stop}

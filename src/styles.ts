@@ -35,20 +35,32 @@ export const cardStyles = css`
     aspect-ratio: 24 / 22;
     overflow: hidden;
     background: linear-gradient(var(--ist-sky-day-top), var(--ist-sky-day-bottom));
-    transition: background 2s ease;
     isolation: isolate;
+    transition: --lean 2.5s ease, --amp 2.5s ease, --hat-lean 2.5s ease, --warn-color 1.5s ease;
   }
   :host([fill-height]) .scene {
     aspect-ratio: auto;
   }
-  .scene.night {
-    background: linear-gradient(var(--ist-sky-night-top), var(--ist-sky-night-bottom));
+  .sky {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 2.5s ease;
   }
-  .scene.overcast:not(.night) {
+  .sky.overcast-day {
     background: linear-gradient(#8f9daa, #d3dbe3);
   }
-  .scene.overcast.night {
+  .sky.night {
+    background: linear-gradient(var(--ist-sky-night-top), var(--ist-sky-night-bottom));
+  }
+  .sky.overcast-night {
     background: linear-gradient(#141a26, #323c4f);
+  }
+  .overcast .sky.overcast-day,
+  .night .sky.night,
+  .night.overcast .sky.overcast-night {
+    opacity: 1;
   }
   .tint {
     position: absolute;
@@ -75,6 +87,9 @@ export const cardStyles = css`
   /* ---------- ground ---------- */
   .ground {
     fill: var(--ist-snow);
+  }
+  .ground {
+    transition: fill 2.5s ease;
   }
   .night .ground {
     fill: #c9d6ea;
@@ -375,6 +390,7 @@ export const cardStyles = css`
     z-index: 2;
   }
   .title {
+    transition: color 2s ease;
     display: flex;
     flex-direction: column;
     color: #1e2a3a;
@@ -404,7 +420,7 @@ export const cardStyles = css`
     border-radius: 12px !important;
     text-align: right;
     line-height: 1.3;
-    animation: ist-pulse 1.6s ease-in-out infinite;
+    pointer-events: auto;
   }
   .info {
     display: flex;
@@ -450,6 +466,185 @@ export const cardStyles = css`
   .missing {
     padding: 16px;
     color: var(--error-color, #db4437);
+  }
+
+
+  /* ---------- effect groups fade in / out ---------- */
+  .fx {
+    position: absolute;
+    inset: 0;
+    animation: ist-fade-in 1.6s ease both;
+    transition: opacity 1.5s ease;
+  }
+  .fx.leaving {
+    opacity: 0;
+  }
+  .state-text {
+    display: inline-block;
+    animation: ist-text-in 0.6s ease both;
+  }
+
+  /* ---------- power button ---------- */
+  .power {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 3;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    color: #fff;
+    background: #6b7280;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: background 0.6s ease, box-shadow 0.6s ease, transform 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .power:hover {
+    transform: scale(1.05);
+  }
+  .power:active {
+    transform: scale(0.92);
+  }
+  .power:focus-visible {
+    outline: 2px solid var(--primary-color, #03a9f4);
+    outline-offset: 3px;
+  }
+  .power svg {
+    position: static;
+    width: 24px;
+    height: 24px;
+  }
+  .power .ring {
+    position: absolute;
+    inset: -4px;
+    width: auto;
+    height: auto;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    pointer-events: none;
+  }
+  .on .power {
+    background: #d81f26;
+    box-shadow: 0 0 0 0 rgba(216, 31, 38, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+    animation: ist-power-glow 2.4s ease-in-out infinite;
+  }
+  .pending .power .ring {
+    border-top-color: #f5c542;
+    border-right-color: #f5c542;
+    animation: ist-spin 0.9s linear infinite;
+  }
+  .power.failed {
+    animation: ist-shake 0.5s ease both;
+  }
+  .unavailable .power {
+    background: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  /* ---------- pending (switch command sent) ---------- */
+  .pending .blower .led {
+    fill: #f5c542;
+    animation: ist-blink 0.5s steps(2) infinite;
+  }
+  .pending.off .blower .fan {
+    animation: ist-spin 1.2s linear infinite;
+  }
+  .pending.off .heap {
+    animation: ist-twitch 0.6s ease-in-out infinite;
+  }
+  .pending.on .breathe {
+    animation: ist-shudder 0.5s linear infinite;
+  }
+
+  /* ---------- unavailable ---------- */
+  .unavailable .figure {
+    filter: grayscale(0.85) brightness(0.8);
+  }
+  .unavailable .blower .led {
+    fill: #ef4444;
+    animation: ist-blink 1.2s steps(2) infinite;
+  }
+  .unplugged {
+    position: absolute;
+    left: 50%;
+    top: 38%;
+    width: 44px;
+    height: 44px;
+    margin-left: -22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.85);
+    color: #b91c1c;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    animation: ist-fade-in 1s ease both, ist-bob 2.4s ease-in-out 1s infinite;
+    pointer-events: none;
+  }
+  .unplugged svg {
+    position: static;
+    width: 26px;
+    height: 26px;
+  }
+
+  /* ---------- chips ---------- */
+  .chip {
+    animation: ist-chip-in 0.5s ease both;
+  }
+  .chip.warning {
+    transition: background 1.5s ease;
+  }
+  .chip.warning.severe {
+    animation: ist-chip-in 0.5s ease both, ist-warn-pulse 1.8s ease-in-out 0.5s infinite;
+  }
+  .storm-hint.leaving {
+    opacity: 0;
+    transition: opacity 1.2s ease;
+  }
+  .storm-hint {
+    animation: ist-chip-in 0.6s ease both, ist-pulse 1.6s ease-in-out 0.6s infinite;
+  }
+
+  @keyframes ist-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes ist-text-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes ist-chip-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.95); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes ist-warn-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--warn-color); }
+    50% { box-shadow: 0 0 0 4px transparent; }
+  }
+  @keyframes ist-power-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(216, 31, 38, 0.55), 0 2px 6px rgba(0, 0, 0, 0.3); }
+    50% { box-shadow: 0 0 0 8px rgba(216, 31, 38, 0), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  }
+  @keyframes ist-shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-5px); }
+    40%, 80% { transform: translateX(5px); }
+  }
+  @keyframes ist-blink {
+    to { visibility: hidden; }
+  }
+  @keyframes ist-twitch {
+    0%, 100% { transform: scale(1, 1); }
+    50% { transform: scale(1.02, 1.08); }
+  }
+  @keyframes ist-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
   }
 
   /* ---------- keyframes ---------- */
@@ -578,7 +773,11 @@ export const cardStyles = css`
     .star,
     .fog,
     .flash,
-    .storm-hint {
+    .storm-hint,
+    .unplugged,
+    .on .power,
+    .chip,
+    .fx {
       animation: none !important;
     }
     .on .sway {

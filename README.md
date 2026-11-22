@@ -11,6 +11,10 @@ Wind, Windrichtung, Wetter und die aktuelle **DWD-Warnstufe** fließen live in d
 | --- | --- | --- |
 | ![](docs/on-snow.png) | ![](docs/night-storm.png) | ![](docs/off.png) |
 
+| Schaltet gerade (Button wartet auf die Steckdose) | Steckdose nicht verfügbar |
+| --- | --- |
+| ![](docs/pending.png) | ![](docs/unavailable.png) |
+
 ## Funktionen
 
 - 🎈 **Aufblasen / Luft ablassen** – animiert, inklusive hängendem Kopf beim Aufpumpen und zusammengesacktem Haufen im ausgeschalteten Zustand
@@ -19,7 +23,9 @@ Wind, Windrichtung, Wetter und die aktuelle **DWD-Warnstufe** fließen live in d
 - 🌨️ **Wetter** – Schnee, Regen, Gewitter (Blitze), Nebel, Wolken, Sternenhimmel bei Nacht (über `sun.sun`), Raureif bei Frost
 - ⚠️ **DWD-Warnungen** – farbige Warnstufe (gelb/orange/rot/violett) mit Überschrift; Warnungen wie Schneefall, Gewitter, Starkregen oder Nebel verstärken die Szene
 - 🛑 **Sturmhinweis** – ab einer einstellbaren Windgeschwindigkeit erscheint „Starker Wind – Abschalten empfohlen“
-- 🖱️ **HA-Standard-Aktionen** – Antippen schaltet (`tap_action`), langes Drücken öffnet Details (`hold_action`), Doppeltippen frei belegbar; Tastatur-bedienbar
+- 🔴 **Eigener Ein/Aus-Button** – unten rechts; leuchtet rot, wenn der Weihnachtsmann an ist, zeigt einen Lade-Ring, solange die Steckdose noch nicht geantwortet hat, und wackelt kurz, wenn das Schalten fehlschlägt
+- 🎬 **Alle Zustände animiert** – Aufblasen, Luft ablassen, „schaltet gerade“ (Gebläse läuft an, gelbe LED blinkt), „nicht verfügbar“ (grauer Haufen, rote LED, schwebendes Stecker-Symbol), Tag/Nacht-Wechsel, Wolken, Schnee, Regen, Nebel, Gewitter und Sturmhinweis blenden weich ein und aus, Wind und Warnfarbe ändern sich fließend
+- 🖱️ **HA-Standard-Aktionen** – Antippen der Karte öffnet Details (`tap_action`), langes Drücken ebenso (`hold_action`), Doppeltippen frei belegbar; Tastatur-bedienbar. Ohne Button (`show_power_button: false`) schaltet das Antippen der Karte
 - 🧩 **Visueller Editor** mit Entitäts-Auswahl, Aktionen-Editor und Darstellungsoptionen
 - 📐 Unterstützt Masonry- und **Sections**-Dashboards, Deutsch & Englisch, `prefers-reduced-motion`
 
@@ -66,7 +72,8 @@ view_direction: 0
 | `show_name` | Bool | `true` | Name und Status oben links anzeigen |
 | `show_info` | Bool | `true` | Infozeile mit Wind und Warnung anzeigen |
 | `show_weather_effects` | Bool | `true` | Wettereffekte (Schnee, Regen, Blitze …) anzeigen |
-| `tap_action` | Aktion | `toggle` | Standard-Aktion von Home Assistant |
+| `show_power_button` | Bool | `true` | Eigenen Ein/Aus-Button anzeigen |
+| `tap_action` | Aktion | `more-info` (ohne Button: `toggle`) | Standard-Aktion von Home Assistant |
 | `hold_action` | Aktion | `more-info` | |
 | `double_tap_action` | Aktion | `none` | |
 
