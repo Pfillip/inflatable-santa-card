@@ -28,6 +28,30 @@ const SCHEMA = [
     type: "expandable",
     name: "",
     flatten: true,
+    title: "section_check",
+    icon: "mdi:balloon",
+    schema: [
+      {
+        name: "inflated_entity",
+        selector: { entity: { domain: ["binary_sensor", "sensor", "input_boolean", "switch"] } },
+      },
+      {
+        type: "grid",
+        name: "",
+        schema: [
+          { name: "inflated_threshold", selector: { number: { min: 0, max: 5000, step: 1, mode: "box" } } },
+          {
+            name: "inflate_timeout",
+            selector: { number: { min: 5, max: 600, step: 5, mode: "box", unit_of_measurement: "s" } },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: "expandable",
+    name: "",
+    flatten: true,
     title: "section_appearance",
     icon: "mdi:palette",
     schema: [

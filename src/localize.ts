@@ -3,6 +3,10 @@ const de = {
   off: "Luft raus",
   inflating: "Wird aufgeblasen …",
   deflating: "Luft wird abgelassen …",
+  leaking: "Luft entweicht …",
+  fault_on: "Eingeschaltet, aber nicht aufgeblasen",
+  fault_off: "Ausgeschaltet, aber noch aufgeblasen",
+  fault_chip: "Aufblasen prüfen!",
   turn_on: "Einschalten",
   turn_off: "Ausschalten",
   unavailable: "Nicht verfügbar",
@@ -32,6 +36,10 @@ const de = {
   "editor.section_entities": "Wetter & Wind",
   "editor.section_appearance": "Darstellung",
   "editor.section_actions": "Interaktionen",
+  "editor.section_check": "Aufblas-Prüfung (optional)",
+  "editor.inflated_entity": "Entität „Weihnachtsmann ist aufgeblasen“",
+  "editor.inflated_threshold": "Schwellwert bei Zahlen-Sensor (z. B. Watt)",
+  "editor.inflate_timeout": "Wartezeit bis zur Störmeldung (Sekunden)",
 };
 
 const en: typeof de = {
@@ -39,6 +47,10 @@ const en: typeof de = {
   off: "Deflated",
   inflating: "Inflating …",
   deflating: "Deflating …",
+  leaking: "Losing air …",
+  fault_on: "Switched on, but not inflated",
+  fault_off: "Switched off, but still inflated",
+  fault_chip: "Check inflation!",
   turn_on: "Turn on",
   turn_off: "Turn off",
   unavailable: "Unavailable",
@@ -67,6 +79,10 @@ const en: typeof de = {
   "editor.section_entities": "Weather & wind",
   "editor.section_appearance": "Appearance",
   "editor.section_actions": "Interactions",
+  "editor.section_check": "Inflation check (optional)",
+  "editor.inflated_entity": "Entity \"Santa is inflated\"",
+  "editor.inflated_threshold": "Threshold for numeric sensor (e.g. watts)",
+  "editor.inflate_timeout": "Delay before reporting a fault (seconds)",
 };
 
 export type LocalizeKey = keyof typeof de;

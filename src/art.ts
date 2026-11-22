@@ -53,8 +53,8 @@ export const halo = svg`<ellipse class="halo" cx="120" cy="140" rx="110" ry="112
 
 export const ropes = svg`
   <g class="ropes">
-    <path d="M80 196 Q 58 218 36 236" />
-    <path d="M160 196 Q 182 218 204 236" />
+    <g class="rope rope-l"><g class="rope-sway"><path d="M80 196 Q 56 214 36 236" /></g></g>
+    <g class="rope rope-r"><g class="rope-sway"><path d="M160 196 Q 184 214 204 236" /></g></g>
     <rect x="33" y="232" width="6" height="8" rx="1" />
     <rect x="201" y="232" width="6" height="8" rx="1" />
   </g>
