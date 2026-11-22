@@ -15,9 +15,15 @@ Wind, Windrichtung, Wetter und die aktuelle **DWD-Warnstufe** fließen live in d
 | --- | --- |
 | ![](docs/pending.png) | ![](docs/unavailable.png) |
 
+| Wird aufgeblasen (Prüfung läuft) | Störung: eingeschaltet, aber nicht aufgeblasen | Sturm: Seile gespannt |
+| --- | --- | --- |
+| ![](docs/inflating-check.png) | ![](docs/fault.png) | ![](docs/storm-ropes.png) |
+
 ## Funktionen
 
 - 🎈 **Aufblasen / Luft ablassen** – animiert, inklusive hängendem Kopf beim Aufpumpen und zusammengesacktem Haufen im ausgeschalteten Zustand
+- 🪢 **Animierte Halteseile** – liegen schlaff im Schnee, wenn die Luft raus ist, spannen sich beim Aufblasen und schnappen am Ende straff, schwingen mit dem Wind mit und vibrieren bei Sturm
+- ✅ **Optionale Aufblas-Prüfung** – eine zusätzliche Entität meldet, ob der Weihnachtsmann *wirklich* aufgeblasen ist (z. B. Leistungsmessung der Steckdose oder ein Binärsensor). Bis sie es bestätigt, ist er nur halb aufgeblasen und kämpft; bleibt die Bestätigung aus, erscheint eine Störmeldung
 - 💡 **Beleuchtung** – warmes Leuchten, wenn die Steckdose eingeschaltet ist (nachts besonders schön), Gebläse mit Lüfter und Status-LED
 - 🌬️ **Wind** – der Weihnachtsmann schwankt umso stärker, je mehr Wind weht, und neigt sich in Windrichtung; Mützenzipfel flattert, Windschlieren und Wolken ziehen passend zur Richtung
 - 🌨️ **Wetter** – Schnee, Regen, Gewitter (Blitze), Nebel, Wolken, Sternenhimmel bei Nacht (über `sun.sun`), Raureif bei Frost
@@ -69,6 +75,9 @@ view_direction: 0
 | `weather_entity` | Wetter | – | Optional für Schnee/Regen/Gewitter/Nebel/Wolken; liefert auch Wind, falls keine Wind-Sensoren gesetzt sind |
 | `storm_threshold` | Zahl | `50` | Ab dieser Windgeschwindigkeit (km/h) erscheint der Sturmhinweis und der Weihnachtsmann zittert |
 | `view_direction` | Zahl | `0` | Himmelsrichtung, in die du auf den Weihnachtsmann schaust (0 = Norden, 90 = Osten …). Damit passt die Neigung zur echten Situation im Garten |
+| `inflated_entity` | Entität | – | Optional: meldet, ob der Weihnachtsmann wirklich aufgeblasen ist. `binary_sensor`, `input_boolean` oder `switch` (an = aufgeblasen) **oder** ein Zahlen-Sensor, z. B. die Leistung der Steckdose in Watt |
+| `inflated_threshold` | Zahl | `10` | Nur bei Zahlen-Sensoren: Werte darüber gelten als „aufgeblasen“ (z. B. Gebläse zieht mehr als 10 W) |
+| `inflate_timeout` | Zahl | `90` | Sekunden nach dem Schalten, bis eine fehlende Bestätigung als Störung gemeldet wird |
 | `show_name` | Bool | `true` | Name und Status oben links anzeigen |
 | `show_info` | Bool | `true` | Infozeile mit Wind und Warnung anzeigen |
 | `show_weather_effects` | Bool | `true` | Wettereffekte (Schnee, Regen, Blitze …) anzeigen |
@@ -78,6 +87,21 @@ view_direction: 0
 | `double_tap_action` | Aktion | `none` | |
 
 **Tipp:** Ein Tipp auf die Wind- oder Warnungs-Chips öffnet direkt deren Detaildialog.
+
+### Aufblas-Prüfung
+
+Ohne `inflated_entity` richtet sich die Animation nur nach der Steckdose. Mit Prüf-Entität gilt:
+
+| Steckdose | Prüfung | Darstellung |
+| --- | --- | --- |
+| an | aufgeblasen | Weihnachtsmann steht, Seile gespannt |
+| an | noch nicht (innerhalb der Wartezeit) | halb aufgeblasen, kämpft sich hoch – „Wird aufgeblasen …“ |
+| an | nicht (Wartezeit vorbei) | halb aufgeblasen, rote LED, Chip „Aufblasen prüfen!“ |
+| aus | noch aufgeblasen (innerhalb der Wartezeit) | sackt halb zusammen – „Luft entweicht …“ |
+| aus | noch aufgeblasen (Wartezeit vorbei) | Störmeldung „Ausgeschaltet, aber noch aufgeblasen“ |
+| aus | nicht aufgeblasen | Haufen im Schnee, Seile schlaff |
+
+Tipp: Misst deine Schaltsteckdose die Leistung, nimm einfach deren Leistungs-Sensor – läuft das Gebläse, ist der Weihnachtsmann aufgeblasen.
 
 ### DWD-Warnstufen
 

@@ -15,7 +15,7 @@ import {
 } from "./utils";
 import "./editor";
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 const CARD_TAG = "inflatable-santa-card";
 
 console.info(
@@ -45,6 +45,9 @@ const POWER_ICON = svg`<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="c
 const UNPLUGGED_ICON = svg`<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.84 22.73L15.31 17.2 14.5 18c-1.3 1.3-3.08 1.83-4.79 1.6l-2.68 2.67-1.41-1.41 2.67-2.68C8.06 16.47 8.6 14.7 9.89 13.4l.8-.81L1.11 3l1.28-1.27 19.73 19.73zM17.6 14.9l-1.4-1.41 1.6-1.6-1.06-1.06-1.6 1.6-1.41-1.4 1.6-1.6-1.06-1.07-1.6 1.6-1.41-1.4 2.12-2.13a5.25 5.25 0 0 1 6.44-.78l2.67-2.67 1.41 1.41-2.67 2.67c.6.98.84 2.13.71 3.24z"/></svg>`;
 
 type Linger = { value: any; until: number };
+type Visual = "on" | "half" | "off";
+type Phase = "ok" | "inflating" | "leaking" | "fault_on" | "fault_off";
+const TRUE_STATES = new Set(["on", "true", "open", "home", "inflated", "aufgeblasen", "yes"]);
 
 const fireEvent = (node: EventTarget, type: string, detail?: unknown): void => {
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -61,6 +64,8 @@ export class InflatableSantaCard extends LitElement {
   private _held = false;
   private _tapTimer?: number;
   private _lastIsOn?: boolean;
+  private _lastVisual?: Visual;
+  private _faultTimer?: number;
   @state() private _pending = false;
   @state() private _failed = false;
   private _pendingTimer?: number;
@@ -104,6 +109,8 @@ export class InflatableSantaCard extends LitElement {
       show_power_button: true,
       storm_threshold: 50,
       view_direction: 0,
+      inflated_threshold: 10,
+      inflate_timeout: 90,
       ...config,
     };
   }
@@ -134,6 +141,7 @@ export class InflatableSantaCard extends LitElement {
       c.wind_direction_entity,
       c.warning_entity,
       c.weather_entity,
+      c.inflated_entity,
       "sun.sun",
     ];
     return (
@@ -263,6 +271,31 @@ export class InflatableSantaCard extends LitElement {
     }
   }
 
+  /** Reads the optional "really inflated" entity. undefined = no check configured / unknown. */
+  private _readInflated(): boolean | undefined {
+    const id = this._config?.inflated_entity;
+    const st = id ? this.hass?.states[id] : undefined;
+    if (!st || st.state === "unavailable" || st.state === "unknown") return undefined;
+    const num = Number(String(st.state).replace(",", "."));
+    if (st.state.trim() !== "" && Number.isFinite(num)) return num > (this._config?.inflated_threshold ?? 10);
+    return TRUE_STATES.has(st.state.toLowerCase());
+  }
+
+  /** Combines plug state and inflation check into what Santa should look like. */
+  private _visualState(isOn: boolean, changedAt?: string): { visual: Visual; phase: Phase } {
+    const inflated = this._readInflated();
+    if (inflated === undefined || inflated === isOn) return { visual: isOn ? "on" : "off", phase: "ok" };
+    const timeout = (this._config?.inflate_timeout ?? 90) * 1000;
+    const since = changedAt ? Date.now() - Date.parse(changedAt) : 0;
+    const remaining = timeout - (Number.isFinite(since) ? since : 0);
+    window.clearTimeout(this._faultTimer);
+    if (remaining > 0) {
+      this._faultTimer = window.setTimeout(() => this.requestUpdate(), remaining + 50);
+      return { visual: "half", phase: isOn ? "inflating" : "leaking" };
+    }
+    return { visual: "half", phase: isOn ? "fault_on" : "fault_off" };
+  }
+
   /**
    * Keeps an effect visible for a moment after it ended, so it can fade out.
    * Returns the value to render and whether it is currently leaving.
@@ -300,16 +333,21 @@ export class InflatableSantaCard extends LitElement {
     const stateObj = this.hass.states[c.entity];
     const unavailable = !stateObj || stateObj.state === "unavailable" || stateObj.state === "unknown";
     const isOn = !!stateObj && ON_STATES.has(stateObj.state);
-    // animate only when the state really changed after the first paint
-    const animate = this._animate && this._lastIsOn !== undefined && this._lastIsOn !== isOn;
+    const { visual, phase } = unavailable
+      ? { visual: "off" as Visual, phase: "ok" as Phase }
+      : this._visualState(isOn, stateObj?.last_changed);
     if (this._lastIsOn !== undefined && this._lastIsOn !== isOn && this._pending) {
       window.clearTimeout(this._pendingTimer);
       this._pending = false;
     }
-    if (this._lastIsOn === undefined || this._lastIsOn !== isOn) {
-      this._lastIsOn = isOn;
+    this._lastIsOn = isOn;
+    // "animate" marks the few seconds while Santa is filling up / collapsing
+    const animate = this._animate && this._lastVisual !== undefined && this._lastVisual !== visual;
+    if (this._lastVisual !== visual) {
+      this._lastVisual = visual;
       if (animate) this._animatingUntil = Date.now() + 3500;
     }
+    const fault = phase === "fault_on" || phase === "fault_off";
     const keepAnimClass = animate || Date.now() < this._animatingUntil;
 
     const wind = readWind(this.hass, c.wind_speed_entity, c.wind_direction_entity, c.weather_entity);
@@ -332,6 +370,9 @@ export class InflatableSantaCard extends LitElement {
     const sceneClasses = [
       "scene",
       isOn ? "on" : "off",
+      `v-${visual}`,
+      fault ? "fault" : "",
+      this._animate ? "" : "no-anim",
       keepAnimClass ? "animate" : "",
       scene.night ? "night" : "",
       scene.clouds >= 2 ? "overcast" : "",
@@ -354,12 +395,14 @@ export class InflatableSantaCard extends LitElement {
     ].join(";");
 
     const name = c.name || stateObj?.attributes.friendly_name || c.entity;
-    const stormHint = this._keep("storm", storm && isOn);
+    const stormHint = this._keep("storm", storm && visual !== "off");
     const stateText = unavailable
       ? localize("unavailable", lang)
       : this._pending
         ? localize(isOn ? "deflating" : "inflating", lang)
-        : localize(isOn ? "on" : "off", lang);
+        : phase !== "ok"
+          ? localize(phase, lang)
+          : localize(isOn ? "on" : "off", lang);
 
     return html`
       <ha-card
@@ -417,7 +460,7 @@ export class InflatableSantaCard extends LitElement {
               </div>`
             : nothing}
         </div>
-        ${c.show_info !== false ? this._renderInfo(wind.speed, wind.direction, warning, lang) : nothing}
+        ${c.show_info !== false || fault ? this._renderInfo(wind.speed, wind.direction, warning, lang, fault) : nothing}
       </ha-card>
     `;
   }
@@ -518,9 +561,21 @@ export class InflatableSantaCard extends LitElement {
     direction: number | undefined,
     warning: WarningInfo | undefined,
     lang: string,
+    fault = false,
   ): TemplateResult {
     const c = this._config!;
     const chips: TemplateResult[] = [];
+    if (fault) {
+      chips.push(html`<span
+        class="chip fault"
+        role="alert"
+        @pointerdown=${this._stop}
+        @pointerup=${(e: Event) => this._moreInfo(e, c.inflated_entity)}
+      >
+        <ha-icon icon="mdi:alert-circle"></ha-icon>${localize("fault_chip", lang)}
+      </span>`);
+    }
+    if (c.show_info === false) return html`<div class="info">${chips}</div>`;
     if (speed !== undefined || direction !== undefined) {
       const arrow =
         direction !== undefined

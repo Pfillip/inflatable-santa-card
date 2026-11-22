@@ -159,13 +159,6 @@ export const cardStyles = css`
   .ropes rect {
     fill: #6b5a3e;
   }
-  .ropes {
-    transition: opacity 1s ease;
-    opacity: 0.25;
-  }
-  .on .ropes {
-    opacity: 1;
-  }
   .blower rect {
     fill: #4b5563;
   }
@@ -212,56 +205,145 @@ export const cardStyles = css`
     stroke-linecap: round;
   }
 
-  /* resting states (also used when animations are disabled) */
-  .off .inflate {
+  /*
+   * Visual inflation state (v-off / v-half / v-on) uses transitions, so every
+   * change between the three states animates – and can be interrupted midway.
+   */
+  .inflate,
+  .rope {
+    transition: transform 2.6s cubic-bezier(0.55, 0, 0.75, 0.4), opacity 0.3s ease 2.4s;
+  }
+  .v-off .inflate {
     transform: scale(1.35, 0.06);
     opacity: 0;
   }
-  .off .head {
+  .v-half .inflate {
+    transform: scale(1.12, 0.55);
+  }
+  .v-half .inflate,
+  .v-half .rope {
+    transition: transform 2.4s cubic-bezier(0.3, 1.25, 0.5, 1), opacity 0.2s ease;
+  }
+  .v-on .inflate,
+  .v-on .rope {
+    transform: none;
+    transition: transform 3.2s cubic-bezier(0.3, 1.35, 0.45, 1), opacity 0.2s ease;
+  }
+  .head {
+    transition: transform 1.8s ease-in;
+  }
+  .v-off .head {
     transform: rotate(85deg);
   }
-  .on .heap {
+  .v-half .head {
+    transform: rotate(48deg);
+    transition: transform 1.6s ease;
+  }
+  .v-on .head {
+    transform: none;
+    transition: transform 1.4s cubic-bezier(0.3, 1.6, 0.5, 1) 1.8s;
+  }
+  .heap {
+    transition: opacity 0.5s ease 2.2s, transform 0.5s ease 2.2s;
+  }
+  .v-half .heap,
+  .v-on .heap {
     opacity: 0;
+    transform: scale(0.9, 0.7);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .no-anim *,
+  .no-anim *::before,
+  .no-anim *::after {
+    transition: none !important;
   }
 
-  /* state change animations */
-  .on.animate .inflate {
-    animation: ist-inflate 3.4s cubic-bezier(0.3, 0.7, 0.4, 1) both;
+  /* ---------- tethers ---------- */
+  .rope-l {
+    transform-box: view-box;
+    transform-origin: 36px 236px;
   }
-  .on.animate .head {
-    animation: ist-head-up 3.4s ease-out both;
+  .rope-r {
+    transform-box: view-box;
+    transform-origin: 204px 236px;
   }
-  .on.animate .heap {
-    animation: ist-heap-out 3.4s ease-out both;
+  .rope-l .rope-sway {
+    transform-box: view-box;
+    transform-origin: 36px 236px;
   }
-  .off.animate .inflate {
-    animation: ist-deflate 2.8s ease-in both;
+  .rope-r .rope-sway {
+    transform-box: view-box;
+    transform-origin: 204px 236px;
   }
-  .off.animate .head {
-    animation: ist-head-down 2.8s ease-in both;
+  /* slack on the ground while deflated */
+  .v-off .rope {
+    transform: scale(1, 0.06);
   }
-  .off.animate .heap {
-    animation: ist-heap-in 2.8s ease-out both;
+  .v-half .rope {
+    transform: scale(1, 0.55);
   }
-
-  /* idle motion while inflated */
-  .on .sway {
+  /* ropes follow Santa's lean and sway */
+  .v-on .rope-sway {
     animation: ist-sway var(--sway-dur) ease-in-out infinite;
   }
-  .off .sway {
+  .v-half .rope-sway {
+    animation: ist-sway calc(var(--sway-dur) * 1.3) ease-in-out infinite;
+  }
+  .rope path {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  /* taut ropes hum in strong wind */
+  .storm.v-on .rope path {
+    animation: ist-rope-shiver 0.16s linear infinite;
+  }
+  /* the ropes snap tight just as Santa is fully inflated */
+  .animate.v-on .rope path {
+    animation: ist-rope-snap 0.6s ease-out 2.4s both;
+  }
+
+  /* ---------- idle motion ---------- */
+  .v-on .sway {
+    animation: ist-sway var(--sway-dur) ease-in-out infinite;
+  }
+  .v-half .sway {
+    animation: ist-sway calc(var(--sway-dur) * 1.3) ease-in-out infinite;
+  }
+  .sway {
     transition: transform 1s ease;
   }
-  .on .breathe {
+  .v-on .breathe {
     animation: ist-breathe 2.4s ease-in-out 3.4s infinite;
   }
-  .on .arm-wave {
+  .animate.v-on .breathe,
+  .animate.v-half .breathe {
+    animation: ist-shudder 0.4s linear infinite;
+  }
+  .v-half .breathe {
+    animation: ist-struggle 1.4s ease-in-out infinite;
+  }
+  .v-on .arm-wave {
     animation: ist-wave 1.8s ease-in-out 3.4s infinite;
   }
-  .on .hat-tip {
+  .v-on .hat-tip {
     animation: ist-flutter var(--flutter-dur) ease-in-out infinite;
   }
-  .storm.on .breathe {
+  .storm.v-on .breathe {
     animation: ist-shudder 0.35s linear infinite;
+  }
+
+  /* ---------- inflation check failed ---------- */
+  .fault .blower .led {
+    fill: #ef4444;
+    animation: ist-blink 0.4s steps(2) infinite;
+  }
+  .fault.v-half .breathe {
+    animation: ist-struggle 0.9s ease-in-out infinite;
+  }
+  .chip.fault {
+    color: #fff;
+    background: #d32f2f;
+    animation: ist-chip-in 0.5s ease both, ist-shake 0.5s ease 0.5s both;
   }
 
   /* ---------- weather particles ---------- */
@@ -558,7 +640,7 @@ export const cardStyles = css`
   .pending.off .heap {
     animation: ist-twitch 0.6s ease-in-out infinite;
   }
-  .pending.on .breathe {
+  .pending.on.v-on .breathe {
     animation: ist-shudder 0.5s linear infinite;
   }
 
@@ -610,6 +692,22 @@ export const cardStyles = css`
     animation: ist-chip-in 0.6s ease both, ist-pulse 1.6s ease-in-out 0.6s infinite;
   }
 
+  @keyframes ist-struggle {
+    0%, 100% { transform: scale(1, 1) rotate(0deg); }
+    30% { transform: scale(1.03, 0.95) rotate(-2deg); }
+    60% { transform: scale(0.98, 1.05) rotate(1.5deg); }
+  }
+  @keyframes ist-rope-shiver {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(0.4px, -0.5px); }
+    75% { transform: translate(-0.4px, 0.5px); }
+  }
+  @keyframes ist-rope-snap {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.04, 0.96); }
+    60% { transform: scale(0.99, 1.02); }
+    100% { transform: scale(1); }
+  }
   @keyframes ist-fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -648,44 +746,6 @@ export const cardStyles = css`
   }
 
   /* ---------- keyframes ---------- */
-  @keyframes ist-inflate {
-    0% { transform: scale(1.35, 0.06); opacity: 0; }
-    8% { opacity: 1; }
-    35% { transform: scale(1.15, 0.45); }
-    60% { transform: scale(0.94, 0.9); }
-    75% { transform: scale(1.04, 1.04); }
-    88% { transform: scale(0.99, 0.98); }
-    100% { transform: scale(1, 1); opacity: 1; }
-  }
-  @keyframes ist-deflate {
-    0% { transform: scale(1, 1); opacity: 1; }
-    25% { transform: scale(1.02, 0.93); }
-    60% { transform: scale(1.12, 0.5); }
-    90% { transform: scale(1.3, 0.1); opacity: 1; }
-    100% { transform: scale(1.35, 0.06); opacity: 0; }
-  }
-  @keyframes ist-head-up {
-    0% { transform: rotate(80deg); }
-    45% { transform: rotate(55deg); }
-    70% { transform: rotate(-10deg); }
-    85% { transform: rotate(5deg); }
-    100% { transform: rotate(0deg); }
-  }
-  @keyframes ist-head-down {
-    0% { transform: rotate(0deg); }
-    20% { transform: rotate(-6deg); }
-    60% { transform: rotate(40deg); }
-    100% { transform: rotate(85deg); }
-  }
-  @keyframes ist-heap-out {
-    0% { opacity: 1; transform: scale(1); }
-    25% { opacity: 0; transform: scale(0.9, 0.7); }
-    100% { opacity: 0; transform: scale(0.9, 0.7); }
-  }
-  @keyframes ist-heap-in {
-    0%, 75% { opacity: 0; transform: scale(0.9, 0.7); }
-    100% { opacity: 1; transform: scale(1); }
-  }
   @keyframes ist-sway {
     0%, 100% { transform: rotate(calc(var(--lean) - var(--amp))); }
     50% { transform: rotate(calc(var(--lean) + var(--amp))); }
@@ -761,10 +821,12 @@ export const cardStyles = css`
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .on .sway,
-    .on .breathe,
-    .on .arm-wave,
-    .on .hat-tip,
+    .sway,
+    .breathe,
+    .arm-wave,
+    .hat-tip,
+    .rope-sway,
+    .rope path,
     .on .halo,
     .flake,
     .drop,
@@ -780,7 +842,8 @@ export const cardStyles = css`
     .fx {
       animation: none !important;
     }
-    .on .sway {
+    .v-on .sway,
+    .v-on .rope-sway {
       transform: rotate(var(--lean));
     }
     .flake,

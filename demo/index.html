@@ -27,16 +27,19 @@
   <label>Wetter <select id="wx"><option>snowy</option><option>cloudy</option><option>rainy</option><option>lightning-rainy</option><option>clear-night</option><option>fog</option><option>sunny</option></select></label>
   <label><input id="night" type="checkbox" /> Nacht</label>
   <label><input id="unavail" type="checkbox" /> Steckdose nicht verfügbar</label>
+  <label><input id="broken" type="checkbox" /> Gebläse defekt (Prüf-Sensor bleibt bei 0 W)</label>
 </div>
 <div class="grid" id="grid"></div>
 <script type="module">
   const params = new URLSearchParams(location.search);
+  document.getElementById("broken").checked = params.get("broken") === "1";
   const states = {
-    "switch.santa": { entity_id: "switch.santa", state: params.get("on") === "0" ? "off" : params.get("on") === "x" ? "unavailable" : "on", attributes: { friendly_name: "Weihnachtsmann" } },
+    "switch.santa": { entity_id: "switch.santa", state: params.get("on") === "0" ? "off" : params.get("on") === "x" ? "unavailable" : "on", last_changed: new Date(Date.now() - 600000).toISOString(), attributes: { friendly_name: "Weihnachtsmann" } },
     "sensor.wind_speed": { entity_id: "sensor.wind_speed", state: params.get("speed") ?? "25", attributes: { unit_of_measurement: "km/h", device_class: "wind_speed" } },
     "sensor.wind_direction": { entity_id: "sensor.wind_direction", state: params.get("dir") ?? "W", attributes: {} },
     "sensor.dwd_current_warning_level": { entity_id: "sensor.dwd_current_warning_level", state: params.get("lvl") ?? "0", attributes: {} },
     "weather.home": { entity_id: "weather.home", state: params.get("wx") ?? "snowy", attributes: { temperature: -2 } },
+    "sensor.santa_power": { entity_id: "sensor.santa_power", state: params.get("on") === "0" || params.get("on") === "x" ? "0" : (params.get("broken") === "1" ? "0" : "65"), attributes: { unit_of_measurement: "W" } },
     "sun.sun": { entity_id: "sun.sun", state: params.get("night") === "1" ? "below_horizon" : "above_horizon", attributes: {} },
   };
   const warnNames = { 1: "WINDBÖEN", 2: "STURMBÖEN", 3: "ORKANARTIGE BÖEN", 4: "ORKANBÖEN" };
@@ -55,8 +58,15 @@
       await new Promise((r) => setTimeout(r, 1500)); // simulate plug latency
       const e = states[data.entity_id];
       e.state = e.state === "on" ? "off" : "on";
+      e.last_changed = new Date().toISOString();
       states[data.entity_id] = { ...e };
       update();
+      // the power sensor follows a few seconds later – unless the blower is "broken"
+      setTimeout(() => {
+        const broken = document.getElementById("broken").checked;
+        states["sensor.santa_power"] = { ...states["sensor.santa_power"], state: e.state === "on" && !broken ? "65" : "0" };
+        update();
+      }, 3000);
     },
   });
   await customElements.whenDefined("inflatable-santa-card");
@@ -68,6 +78,8 @@
     wind_direction_entity: "sensor.wind_direction",
     warning_entity: "sensor.dwd_current_warning_level",
     weather_entity: "weather.home",
+    inflated_entity: params.get("check") === "0" ? undefined : "sensor.santa_power",
+    inflate_timeout: Number(params.get("timeout") ?? 90),
   });
   document.getElementById("grid").append(card);
   function update() { makeHass(); card.hass = hass; }

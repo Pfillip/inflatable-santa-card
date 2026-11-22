@@ -48,6 +48,9 @@ export interface InflatableSantaCardConfig {
   warning_entity?: string;
   weather_entity?: string;
   view_direction?: number;
+  inflated_entity?: string;
+  inflated_threshold?: number;
+  inflate_timeout?: number;
   storm_threshold?: number;
   show_name?: boolean;
   show_info?: boolean;
