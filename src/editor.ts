@@ -38,6 +38,7 @@ const SCHEMA = [
           { name: "show_name", selector: { boolean: {} } },
           { name: "show_info", selector: { boolean: {} } },
           { name: "show_weather_effects", selector: { boolean: {} } },
+          { name: "show_power_button", selector: { boolean: {} } },
         ],
       },
       {
@@ -57,7 +58,7 @@ const SCHEMA = [
     title: "section_actions",
     icon: "mdi:gesture-tap",
     schema: [
-      { name: "tap_action", selector: { ui_action: { default_action: "toggle" } } },
+      { name: "tap_action", selector: { ui_action: { default_action: "more-info" } } },
       { name: "hold_action", selector: { ui_action: { default_action: "more-info" } } },
       { name: "double_tap_action", selector: { ui_action: { default_action: "none" } } },
     ],
@@ -118,6 +119,7 @@ export class InflatableSantaCardEditor extends LitElement {
       show_name: true,
       show_info: true,
       show_weather_effects: true,
+      show_power_button: true,
       storm_threshold: 50,
       view_direction: 0,
       ...this._config,

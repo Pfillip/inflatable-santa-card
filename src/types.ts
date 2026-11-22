@@ -52,6 +52,7 @@ export interface InflatableSantaCardConfig {
   show_name?: boolean;
   show_info?: boolean;
   show_weather_effects?: boolean;
+  show_power_button?: boolean;
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;

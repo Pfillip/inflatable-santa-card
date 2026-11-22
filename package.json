@@ -1,6 +1,6 @@
 {
   "name": "inflatable-santa-card",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Animated inflatable, illuminated Santa card for Home Assistant – reacts to a smart plug, wind and DWD weather warnings.",
   "type": "module",
   "main": "dist/inflatable-santa-card.js",

@@ -26,12 +26,13 @@
   <label>DWD <select id="lvl"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
   <label>Wetter <select id="wx"><option>snowy</option><option>cloudy</option><option>rainy</option><option>lightning-rainy</option><option>clear-night</option><option>fog</option><option>sunny</option></select></label>
   <label><input id="night" type="checkbox" /> Nacht</label>
+  <label><input id="unavail" type="checkbox" /> Steckdose nicht verfügbar</label>
 </div>
 <div class="grid" id="grid"></div>
 <script type="module">
   const params = new URLSearchParams(location.search);
   const states = {
-    "switch.santa": { entity_id: "switch.santa", state: params.get("on") === "0" ? "off" : "on", attributes: { friendly_name: "Weihnachtsmann" } },
+    "switch.santa": { entity_id: "switch.santa", state: params.get("on") === "0" ? "off" : params.get("on") === "x" ? "unavailable" : "on", attributes: { friendly_name: "Weihnachtsmann" } },
     "sensor.wind_speed": { entity_id: "sensor.wind_speed", state: params.get("speed") ?? "25", attributes: { unit_of_measurement: "km/h", device_class: "wind_speed" } },
     "sensor.wind_direction": { entity_id: "sensor.wind_direction", state: params.get("dir") ?? "W", attributes: {} },
     "sensor.dwd_current_warning_level": { entity_id: "sensor.dwd_current_warning_level", state: params.get("lvl") ?? "0", attributes: {} },
@@ -51,6 +52,7 @@
     locale: { language: "de" },
     language: "de",
     callService: async (d, s, data) => {
+      await new Promise((r) => setTimeout(r, 1500)); // simulate plug latency
       const e = states[data.entity_id];
       e.state = e.state === "on" ? "off" : "on";
       states[data.entity_id] = { ...e };
@@ -77,6 +79,8 @@
   document.getElementById("lvl").onchange = (e) => { setWarning(Number(e.target.value)); states["sensor.dwd_current_warning_level"] = { ...states["sensor.dwd_current_warning_level"] }; update(); };
   document.getElementById("wx").onchange = (e) => set("weather.home", e.target.value);
   document.getElementById("night").onchange = (e) => set("sun.sun", e.target.checked ? "below_horizon" : "above_horizon");
+  document.getElementById("unavail").onchange = (e) => set("switch.santa", e.target.checked ? "unavailable" : "off");
+  window.__set = set;
   window.__toggle = () => hass.callService("homeassistant", "toggle", { entity_id: "switch.santa" });
 </script>
 </body>
